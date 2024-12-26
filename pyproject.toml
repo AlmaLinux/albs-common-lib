@@ -22,7 +22,7 @@ dependencies = [
     "plumbum==1.9.0",
     "requests==2.32.3",
     "python-gnupg==0.5.3",
-    "lxml==4.9.3",
+    "lxml==5.3.0",
 ]
 
 [project.optional-dependencies]
