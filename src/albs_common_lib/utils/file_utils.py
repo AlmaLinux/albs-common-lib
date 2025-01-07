@@ -333,7 +333,6 @@ def download_file(
         elif url_scheme == "ftp":
             real_url = ftp_file_download(url, dst_fd)
         elif url_scheme in ("http", "https"):
-            url = url.replace("http", "https")  # fix for beta
             real_url = http_file_download(
                 url,
                 dst_fd,
