@@ -13,6 +13,7 @@ import pipes
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 import urllib
 
@@ -599,7 +600,7 @@ class AltGitTag(
         return d
 
 
-class WrappedGitRepo():
+class WrappedGitRepo:
 
     def __init__(self, repo_dir):
         """
@@ -607,6 +608,104 @@ class WrappedGitRepo():
         @param repo_dir: Local git repository directory.
         """
         self.__repo_dir = repo_dir
+
+    def archive(
+        self,
+        ref,
+        archive_path,
+        archive_format="tar.bz2",
+        prefix=None,
+        exclude=None,
+    ):
+        """
+        git archive command wrapper.
+
+        @type ref:             str or unicode
+        @param ref:            Git reference to archive.
+        @type archive_path:    str or unicode
+        @param archive_path:   Output file full name.
+        @type archive_format:  str or unicode
+        @param archive_format: Archive format (see git archive -l output for the
+            list of supported formats). NOTE: we have special code for 'tar.bz2'
+            support.
+        @type prefix:          str or unicode
+        @param prefix:         Prepend 'prefix' to each filename in the archive
+            if specified.
+        @type exclude:         list
+        @param exclude:        list of exclude files/folders
+        """
+        cmd = "git archive "
+        if archive_format == "tar.bz2":
+            cmd += "--format=tar "
+        else:
+            cmd += "--format={0} --output={1} ".format(
+                archive_format, archive_path
+            )
+        if prefix:
+            cmd += "--prefix={0} ".format(prefix)
+        cmd += ref
+        if archive_format == "tar.bz2":
+            cmd += " | bzip2 > {0}".format(archive_path)
+        proc = subprocess.Popen(
+            cmd,
+            cwd=self.__repo_dir,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        out, _ = proc.communicate()
+        if exclude:
+            self.remove_from_tarball(archive_path, exclude)
+        if proc.returncode != 0:
+            raise GitError(f"cannot execute git archive command: {out}")
+
+    def remove_from_tarball(self, archive_path, exclude, tmp_dir=None):
+        working_dir = None
+        try:
+            working_dir = tempfile.mkdtemp(prefix='alt_git_', dir=tmp_dir)
+            sources_dir = os.path.join(working_dir, 'sources')
+            os.makedirs(sources_dir)
+            proc = subprocess.Popen(
+                'tar -xjpf {0}'.format(archive_path),
+                cwd=sources_dir,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            out, _ = proc.communicate()
+            if proc.returncode != 0:
+                raise GitError(
+                    f'cannot unpack {archive_path} git archive: {out}'
+                )
+            for excluded in exclude:
+                for sub_dir in os.listdir(sources_dir):
+                    excluded_path = os.path.join(
+                        sources_dir, sub_dir, excluded
+                    )
+                    if os.path.exists(excluded_path):
+                        if os.path.isfile(excluded_path):
+                            os.unlink(excluded_path)
+                        else:
+                            shutil.rmtree(excluded_path)
+            new_archive_path = os.path.join(
+                working_dir, os.path.basename(archive_path)
+            )
+            proc = subprocess.Popen(
+                'tar -cjpf {0} .'.format(new_archive_path),
+                cwd=sources_dir,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            out, _ = proc.communicate()
+            if proc.returncode != 0:
+                raise GitError(
+                    f'cannot create {new_archive_path} git archive: {out}'
+                )
+            shutil.move(new_archive_path, archive_path)
+        finally:
+            if working_dir:
+                shutil.rmtree(working_dir)
 
     def checkout(self, ref, options=None):
         if not isinstance(options, (list, tuple)):
@@ -817,7 +916,7 @@ class GitCacheError(Exception):
     pass
 
 
-class MirroredGitRepo():
+class MirroredGitRepo:
 
     def __init__(
         self,
