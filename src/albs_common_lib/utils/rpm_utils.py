@@ -74,6 +74,50 @@ def srpm_cpio_sha256sum(srpm_path):
     return out.split()[0]
 
 
+def rpm2cpio_unpack(srpm_path, target_dir):
+    """Unpacks an src-RPM using rpm2cpio and cpio."""
+    pipe = (
+        plumbum.local["rpm2cpio"][srpm_path]
+        | plumbum.local["cpio"]["-idmv", "--no-absolute-filenames"]
+    )
+    proc = pipe.popen(cwd=target_dir, env={'HISTFILE': '/dev/null', 'LANG': 'C'})
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        raise CommandExecutionError(
+            f'Failed to unpack src-RPM using rpm2cpio: {err}',
+            proc.returncode, out, err, pipe.formulate()
+        )
+
+def rpm2archive_unpack(srpm_path, target_dir):
+    """Unpacks an src-RPM using rpm2archive and tar."""
+    rpm2archive_cmd = plumbum.local["rpm2archive"][srpm_path]
+    proc = rpm2archive_cmd.popen(
+        cwd=target_dir,
+        env={'HISTFILE': '/dev/null', 'LANG': 'C'}
+    )
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        raise CommandExecutionError(
+            f'Failed to convert src-RPM to archive: {err}',
+            proc.returncode, out, err, rpm2archive_cmd.formulate()
+        )
+
+    archive_path = f"{srpm_path}.tgz"
+    if not os.path.exists(archive_path):
+        raise CommandExecutionError(
+            f'Expected archive {archive_path} not found after rpm2archive execution.'
+        )
+
+    tar_cmd = plumbum.local["tar"]["xfz", archive_path]
+    proc = tar_cmd.popen(cwd=target_dir, env={'HISTFILE': '/dev/null', 'LANG': 'C'})
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        raise CommandExecutionError(
+            f'Failed to extract archive {archive_path}: {err}',
+            proc.returncode, out, err, tar_cmd.formulate()
+        )
+
+
 def unpack_src_rpm(srpm_path, target_dir):
     """
     Unpacks an src-RPM to the target directory.
@@ -90,21 +134,13 @@ def unpack_src_rpm(srpm_path, target_dir):
     build_node.errors.CommandExecutionError
         If an unpacking command failed.
     """
-    pipe = (
-        plumbum.local["rpm2cpio"][srpm_path]
-        | plumbum.local["cpio"]["-idmv", "--no-absolute-filenames"]
-    )
-    proc = pipe.popen(
-        cwd=target_dir, env={'HISTFILE': '/dev/null', 'LANG': 'C'}
-    )
-    out, err = proc.communicate()
-    if proc.returncode != 0:
-        msg = 'Can not unpack src-RPM: {0}'.format(err)
-        if not os.path.exists(srpm_path) or not os.path.getsize(srpm_path):
-            msg = 'src-RPM file is missing or empty.\n{}'.format(msg)
-        raise CommandExecutionError(
-            msg, proc.returncode, out, err, pipe.formulate()
-        )
+    if not os.path.exists(srpm_path) or not os.path.getsize(srpm_path):
+        raise CommandExecutionError(f'src-RPM file {srpm_path} is missing or empty.')
+
+    if os.path.getsize(srpm_path) > 4 * 1024 * 1024 * 1024: # 4Gb
+        rpm2archive_unpack(srpm_path, target_dir)
+    else:
+        rpm2cpio_unpack(srpm_path, target_dir)
 
 
 def compare_rpm_packages(package_a, package_b):
