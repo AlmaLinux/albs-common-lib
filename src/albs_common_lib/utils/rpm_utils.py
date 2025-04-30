@@ -88,33 +88,23 @@ def rpm2cpio_unpack(srpm_path, target_dir):
             proc.returncode, out, err, pipe.formulate()
         )
 
+
 def rpm2archive_unpack(srpm_path, target_dir):
     """Unpacks an src-RPM using rpm2archive and tar."""
-    rpm2archive_cmd = plumbum.local["rpm2archive"][srpm_path]
-    proc = rpm2archive_cmd.popen(
+    pipe = (
+        plumbum.local["cat"][srpm_path]
+        | plumbum.local["rpm2archive"]["-"]
+        | plumbum.local['tar']["xz"]
+    )
+    proc = pipe.popen(
         cwd=target_dir,
-        env={'HISTFILE': '/dev/null', 'LANG': 'C'}
+        env={'HISTFILE': '/dev/null', 'LANG': 'C'},
     )
     out, err = proc.communicate()
     if proc.returncode != 0:
         raise CommandExecutionError(
-            f'Failed to convert src-RPM to archive: {err}',
-            proc.returncode, out, err, rpm2archive_cmd.formulate()
-        )
-
-    archive_path = f"{srpm_path}.tgz"
-    if not os.path.exists(archive_path):
-        raise CommandExecutionError(
-            f'Expected archive {archive_path} not found after rpm2archive execution.'
-        )
-
-    tar_cmd = plumbum.local["tar"]["xfz", archive_path]
-    proc = tar_cmd.popen(cwd=target_dir, env={'HISTFILE': '/dev/null', 'LANG': 'C'})
-    out, err = proc.communicate()
-    if proc.returncode != 0:
-        raise CommandExecutionError(
-            f'Failed to extract archive {archive_path}: {err}',
-            proc.returncode, out, err, tar_cmd.formulate()
+            f'Failed to unpack src-RPM using rpm2archive: {err}',
+            proc.returncode, out, err, pipe.formulate()
         )
 
 
@@ -135,9 +125,12 @@ def unpack_src_rpm(srpm_path, target_dir):
         If an unpacking command failed.
     """
     if not os.path.exists(srpm_path) or not os.path.getsize(srpm_path):
-        raise CommandExecutionError(f'src-RPM file {srpm_path} is missing or empty.')
+        raise CommandExecutionError(
+            f'src-RPM file {srpm_path} is missing or empty.',
+            1, '', '',
+        )
 
-    if os.path.getsize(srpm_path) > 4 * 1024 * 1024 * 1024: # 4Gb
+    if os.path.getsize(srpm_path) > 4 * 1024 * 1024 * 1024:  # 4Gb
         rpm2archive_unpack(srpm_path, target_dir)
     else:
         rpm2cpio_unpack(srpm_path, target_dir)
@@ -195,16 +188,16 @@ def string_to_version(verstring):
         epoch = '0'
     j = verstring.find('-')
     if j != -1:
-        if verstring[i + 1 : j] == '':
+        if verstring[i + 1: j] == '':
             version = None
         else:
-            version = verstring[i + 1 : j]
-        release = verstring[j + 1 :]
+            version = verstring[i + 1: j]
+        release = verstring[j + 1:]
     else:
-        if verstring[i + 1 :] == '':
+        if verstring[i + 1:] == '':
             version = None
         else:
-            version = verstring[i + 1 :]
+            version = verstring[i + 1:]
         release = None
     return epoch, version, release
 
