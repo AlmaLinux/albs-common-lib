@@ -9,7 +9,7 @@ import functools
 import hashlib
 import logging
 import os
-import pipes
+import shlex
 import re
 import shutil
 import subprocess
@@ -333,7 +333,7 @@ def git_push(
 
     @raise GitError: If git return status is not 0.
     """
-    cmd = ["git", "push", pipes.quote(repository)]
+    cmd = ["git", "push", shlex.quote(repository)]
     if tags:
         cmd.append(" --tags")
     if gerrit:
@@ -395,7 +395,7 @@ def git_create_tag(repo_dir, git_tag, force=False):
         if force:
             cmd += " -f"
         proc = subprocess.Popen(
-            "{0} {1}".format(cmd, pipes.quote(git_tag)),
+            f"{cmd} {shlex.quote(git_tag)}",
             cwd=repo_dir,
             shell=True,
             stdout=subprocess.PIPE,
@@ -423,15 +423,14 @@ def git_commit(repo_dir, message, commit_all=True, signoff=False):
     @type commit_all:  bool
     @param commit_all: See git-commit --all argument description.
     """
+    cmd = f"git commit -m {shlex.quote(message)}"
     if commit_all:
-        cmd = "git commit -a -m %s"
-    else:
-        cmd = "git commit -m %s"
+        cmd = "git commit -a -m {shlex.quote(message)}"
     if signoff:
         cmd += " --signoff"
     try:
         proc = subprocess.Popen(
-            cmd % pipes.quote(message),
+            cmd,
             cwd=repo_dir,
             shell=True,
             stdout=subprocess.PIPE,
