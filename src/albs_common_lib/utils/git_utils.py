@@ -724,12 +724,13 @@ class WrappedGitRepo:
 
     @staticmethod
     def cleanup_on_error(repo_dir):
-        for item in os.listdir(repo_dir):
-            item_path = os.path.join(repo_dir, item)
-            if os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-            else:
-                os.remove(item_path)
+        if os.path.exists(repo_dir):
+            for item in os.listdir(repo_dir):
+                item_path = os.path.join(repo_dir, item)
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path)
+                else:
+                    os.remove(item_path)
 
     @staticmethod
     def clone_from(

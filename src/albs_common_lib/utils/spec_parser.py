@@ -301,7 +301,7 @@ class RPMHeaderWrapper():
                 ChangelogRecord(
                     datetime.date.fromtimestamp(date),
                     to_unicode(packager),
-                    [to_unicode(i) for i in text.decode('utf-8').split("\n")],
+                    [to_unicode(i) for i in text.split("\n")],
                 )
             )
         return changelogs
