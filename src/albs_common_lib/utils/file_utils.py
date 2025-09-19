@@ -555,7 +555,7 @@ def file_url_exists(url):
         True if the file exists, False otherwise.
     """
     try:
-        response = requests.head(url)
+        response = requests.head(url, timeout=10)
         return response.status_code == 200
     except requests.RequestException as e:
         return False
