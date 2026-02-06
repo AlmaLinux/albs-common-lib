@@ -425,7 +425,7 @@ def git_commit(repo_dir, message, commit_all=True, signoff=False):
     """
     cmd = f"git commit -m {shlex.quote(message)}"
     if commit_all:
-        cmd = "git commit -a -m {shlex.quote(message)}"
+        cmd = f"git commit -a -m {shlex.quote(message)}"
     if signoff:
         cmd += " --signoff"
     try:
